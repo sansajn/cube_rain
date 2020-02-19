@@ -1,17 +1,23 @@
 // row major matrices xy plane sample with glew3 and OpenGL ES 2.0
 #include <thread>
 #include <chrono>
+#include <random>
 #include <iostream>
+#include <vector>
 #include <cassert>
 #include <GLFW/glfw3.h>
 #include "phys/matrices.h"
 #include "phys/Camera.h"
 
+using std::vector;
 using std::chrono::steady_clock,
 	std::chrono::duration,
 	std::chrono::duration_cast;
-using namespace std::chrono_literals;
+using std::random_device,
+	std::default_random_engine;
 using std::cout, std::endl;
+using namespace std::chrono_literals;
+
 using phys::mat4, 
 	phys::vec3, 
 	phys::Projection, 
@@ -61,6 +67,8 @@ void push<vec3>(vec3 const & val, GLint loc)
 	glUniform3fv(loc, 1, &val.asArray[0]);
 }
 
+vec3 random_cube_position();
+
 GLint get_shader_program(char const * vertex_shader_source, char const * fragment_shader_source);
 
 int main(int argc, char * argv[]) 
@@ -105,6 +113,10 @@ int main(int argc, char * argv[])
 	steady_clock::time_point last_tp = steady_clock::now();
 	float cube_angle = 0;
 	
+	vector<vec3> positions(100);
+	for (vec3 & pos : positions)
+		pos = random_cube_position();
+	
 	while (!glfwWindowShouldClose(window))
 	{
 		glfwPollEvents();
@@ -124,13 +136,33 @@ int main(int argc, char * argv[])
 		draw_xy_plane(xy_plane_vbo, position_loc);
 		
 		// draw cube
-		constexpr float angular_velocity = 360/3.f;
+		constexpr float angular_velocity = 360/5.f;
 		cube_angle += angular_velocity * dt;  // deg
 		mat4 M_cube = YRotation(cube_angle);
 		local_to_screen = M_cube * world_to_screen;
 		push(local_to_screen, local_to_screen_loc);
 		push(cube_color, color_loc);
 		draw_cube(cube_vbo, position_loc);
+		
+		// draw falling cubes
+		for (vec3 & pos : positions)
+		{
+			constexpr float fall_speed = 3.f;
+			pos.y -= fall_speed * dt;
+			
+			// reuse fallen cubes
+			if (pos.y < -10.f)
+			{
+				pos = random_cube_position();
+				continue;
+			}
+		
+			mat4 M = Scale(0.2f, 0.2f, 0.2f) * Translate(pos);
+			local_to_screen = M * world_to_screen;
+			push(local_to_screen, local_to_screen_loc);
+			push(cube_color, color_loc);
+			draw_cube(cube_vbo, position_loc);
+		}
 		
 		glfwSwapBuffers(window);
 		
@@ -143,6 +175,17 @@ int main(int argc, char * argv[])
 	glDeleteProgram(shader_program);
 	
 	return 0;
+}
+
+vec3 random_cube_position()
+{
+	static random_device rd;
+	static default_random_engine rand{rd()};
+	
+	return vec3{
+		1 + (rand() % 10) - 5.f, 
+		10.f + (rand() % 20), 
+		1 + (rand() % 10) - 5.f};
 }
 
 GLuint push_cube()
