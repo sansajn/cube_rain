@@ -57,7 +57,8 @@ void main() {
 	gl_FragColor = vec4(max(dot(n, light_direction), 0.2) * color, 1.0);
 })";
 
-static GLfloat const xy_plane_verts[] = {
+// 2 triangles
+constexpr float xy_plane_verts[] = {
 	// triangle 1
 	-1.f, -1.f, 0.f,
 	1.f, -1.f, 0.f,
@@ -69,7 +70,8 @@ static GLfloat const xy_plane_verts[] = {
 	-1.f, -1.f, 0.f
 };
 
-static GLfloat const xz_plane_verts[] = {
+// 2 triangles
+constexpr float xz_plane_verts[] = {
 	// triangle 1
 	-1.f, 0.f, -1.f,
 	1.f, 0.f, -1.f,
@@ -81,6 +83,58 @@ static GLfloat const xz_plane_verts[] = {
 	-1.f, 0.f, -1.f
 };
 
+// 12 triangles
+constexpr float cube_verts[] = {
+	-1.f, -1.f, -1.f,  // 1
+	1.f, -1.f, -1.f,
+	1.f, 1.f, -1.f,
+	
+	1.f, 1.f, -1.f,  // 2
+	-1.f, 1.f, -1.f,
+	-1.f, -1.f, -1.f,
+	
+	1.f, -1.f, -1.f,  // 3
+	1.f, -1.f, 1.f,
+	1.f, 1.f, 1.f,
+	
+	1.f, 1.f, 1.f,  // 4
+	1.f, 1.f, -1.f,
+	1.f, -1.f, -1.f,
+	
+	-1.f, -1.f, 1.f,  // 5
+	-1.f, 1.f, 1.f,
+	1.f, 1.f, 1.f,
+	
+	1.f, 1.f, 1.f,  // 6
+	1.f, -1.f, 1.f,
+	-1.f, -1.f, 1.f,
+		
+	-1.f, -1.f, -1.f,  // 7
+	-1.f, 1.f, -1.f,
+	-1.f, 1.f, 1.f,
+	
+	-1.f, 1.f, 1.f,  // 8
+	-1.f, -1.f, 1.f,
+	-1.f, -1.f, -1.f,
+	
+	-1.f, -1.f, -1.f,  // 9
+	-1.f, -1.f, 1.f,
+	1.f, -1.f, 1.f,
+	
+	1.f, -1.f, 1.f,  // 10
+	1.f, -1.f, -1.f,
+	-1.f, -1.f, -1.f,
+	
+	-1.f, 1.f, -1.f,  // 11
+	1.f, 1.f, -1.f,
+	1.f, 1.f, 1.f,
+	
+	1.f, 1.f, 1.f,  // 12
+	-1.f, 1.f, 1.f,
+	-1.f, 1.f, -1.f
+};
+
+GLuint push_cube();
 GLuint push_xy_plane();
 GLuint push_xz_plane();
 void draw(GLuint position_vbo, GLuint normal_vbo, GLint position_loc, GLint normal_loc, size_t triangle_count);
@@ -150,16 +204,17 @@ int main(int argc, char * argv[])
 	glViewport(0, 0, WIDTH, HEIGHT);
 
 	// positions
-	GLuint plane_vbo = push_xy_plane();
+	GLuint cube_positions_vbo = push_cube();
 	
 	// prepare normal data
-	GLfloat normals[2*3*3];  // for two triangles
-	calc_triangle_normals(xy_plane_verts, 2, normals);
-	GLuint normal_vbo = push_data(normals, sizeof(normals));
+	GLfloat normals[12*3*3];  // for 12 triangles
+	calc_triangle_normals(cube_verts, 12, normals);
+	GLuint cube_normal_vbo = push_data(normals, sizeof(normals));
 		
 	steady_clock::time_point last_tp = steady_clock::now();
 	
-	float light_angle = 0;
+	float light_angle = 0,
+		cube_angle = 0;
 	
 	while (!glfwWindowShouldClose(window))
 	{
@@ -175,15 +230,18 @@ int main(int argc, char * argv[])
 		
 		// change light direction
 		float const angular_velocity = DEG2RAD(30.f);  // rad/s
-		light_angle += angular_velocity * dt;
+// 		light_angle += angular_velocity * dt;
 		if (light_angle >= DEG2RAD(90.f))
 			light_angle = 0.f;
 		vec3 light_direction = Normalized(
 			vec3{0, sinf(light_angle), -cosf(light_angle)});
 		push(light_direction, light_direction_loc);
 		
-		// draw plane
-		mat4 M = Scale(vec3{2, 2, 1});
+		// draw cube
+		constexpr float cube_angular_velocity = 360/8.f;  // deg/s
+		cube_angle += cube_angular_velocity * dt;
+		
+		mat4 M = YRotation(cube_angle);
 		mat4 local_to_screen = M * world_to_screen;
 		push(local_to_screen, local_to_screen_loc);
 		
@@ -193,15 +251,15 @@ int main(int argc, char * argv[])
 			M._31, M._32, M._33}));
 		push(normal_to_world, normal_to_world_loc);
 		
-		draw(plane_vbo, normal_vbo, position_loc, normal_loc, 2);
+		draw(cube_positions_vbo, cube_normal_vbo, position_loc, normal_loc, 12);
 		
 		glfwSwapBuffers(window);
 		
 		std::this_thread::sleep_for(10ms);
 	}
 	
-	glDeleteBuffers(1, &normal_vbo);
-	glDeleteBuffers(1, &plane_vbo);
+	glDeleteBuffers(1, &cube_normal_vbo);
+	glDeleteBuffers(1, &cube_positions_vbo);
 	glfwTerminate();
 	glDeleteProgram(shader_program);
 	
@@ -236,7 +294,14 @@ void calc_triangle_normals(float const * positions, size_t triangle_count, float
 			*p++ = n.y;
 			*p++ = n.z;
 		}
-	}
+		
+// 		cout << "n=" << n << "\n";
+	}	
+}
+
+GLuint push_cube()
+{
+	return push_data(cube_verts, sizeof(cube_verts));
 }
 
 GLuint push_xy_plane()
