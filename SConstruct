@@ -9,3 +9,5 @@ cpp17.ParseConfig('pkg-config --cflags --libs glfw3 glesv2')
 phys = cpp17.Object(Glob('phys/*.cpp'))
 
 cpp17.Program(['cube_rain.cpp', phys])
+cpp17.Program(['normals.cpp', phys])
+cpp17.Program(['plane_normals.cpp', phys])

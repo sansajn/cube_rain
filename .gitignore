@@ -1,3 +1,5 @@
 *.o
 /*.kdev4
 /cube_rain
+/normals
+/plane_normals
