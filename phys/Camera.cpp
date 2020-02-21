@@ -234,13 +234,13 @@ void OrbitCamera::Pan(const vec2& delataPan, float deltaTime) {
 
 	// Reset zoom to allow infinate zooming after a motion
 	// This part of the code is not in the book!
-	float midZoom = zoomDistanceLimit.x + (zoomDistanceLimit.y - zoomDistanceLimit.x) * 0.5f;
-	zoomDistance = midZoom - zoomDistance;
-	vec3 rotation = vec3(currentRotation.y, currentRotation.x, 0);
-	mat3 orient = Rotation3x3(rotation.x, rotation.y, rotation.z);
-	vec3 dir = MultiplyVector( vec3(0.0, 0.0, -zoomDistance), orient);
-	target = target - dir;
-	zoomDistance = midZoom;
+// 	float midZoom = zoomDistanceLimit.x + (zoomDistanceLimit.y - zoomDistanceLimit.x) * 0.5f;
+// 	zoomDistance = midZoom - zoomDistance;
+// 	vec3 rotation = vec3(currentRotation.y, currentRotation.x, 0);
+// 	mat3 orient = Rotation3x3(rotation.x, rotation.y, rotation.z);
+// 	vec3 dir = MultiplyVector( vec3(0.0, 0.0, -zoomDistance), orient);
+// 	target = target - dir;
+// 	zoomDistance = midZoom;
 }
 
 void OrbitCamera::Update(float dt) {

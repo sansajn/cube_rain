@@ -18,7 +18,8 @@ using std::random_device,
 using std::cout, std::endl;
 using namespace std::chrono_literals;
 
-using phys::vec3,
+using phys::vec2, 
+	phys::vec3,
 	phys::Normalized,
 	phys::Cross;
 using phys::mat4,
@@ -134,10 +135,19 @@ constexpr float cube_verts[] = {
 	-1.f, 1.f, -1.f
 };
 
+// three lines
+constexpr float axis_verts[] = {
+	0,0,0, 1,0,0,  // x
+	0,0,0, 0,1,0,  // y
+	0,0,0, 0,0,1  // z
+};
+
 GLuint push_cube();
+GLuint push_axis();
 GLuint push_xy_plane();
 GLuint push_xz_plane();
 void draw(GLuint position_vbo, GLuint normal_vbo, GLint position_loc, GLint normal_loc, size_t triangle_count);
+void draw_lines(GLuint position_vbo, GLint position_loc, size_t line_count);
 GLuint push_data(void const * data, size_t size_in_bytes);
 void calc_triangle_normals(float const * positions, size_t triangle_count, float * normals);
 
@@ -165,6 +175,57 @@ void push<vec3>(vec3 const & val, GLint loc)
 
 GLint get_shader_program(char const * vertex_shader_source, char const * fragment_shader_source);
 
+
+// user input helpers
+float g_camera_zoom = 10;
+bool g_rotate_camera = false,
+	g_pan_camera = false;
+vec2 g_cursor_move = vec2{0,0};  // normalized
+bool g_animation = true;
+
+void scroll_handler(GLFWwindow * window, double xoffset, double yoffset)
+{
+	g_camera_zoom -= yoffset/4;
+}
+
+void mouse_button_handler(GLFWwindow * window, int button, int action, int mods)
+{
+	if (button == GLFW_MOUSE_BUTTON_LEFT)
+		g_rotate_camera = action == GLFW_PRESS;
+	else if (button == GLFW_MOUSE_BUTTON_RIGHT)
+		g_pan_camera = action == GLFW_PRESS;
+}
+
+void cursor_position_handler(GLFWwindow * window, double xpos, double ypos)
+{
+	static vec2 last_pos = vec2{xpos, ypos};
+	if (g_rotate_camera || g_pan_camera)
+		g_cursor_move = vec2{xpos, ypos} - last_pos;
+	else
+		g_cursor_move = vec2{0,0};
+		
+	last_pos = vec2{xpos, ypos};
+}
+
+void key_handler(GLFWwindow * window, int key, int scancode, int action, int mods)
+{
+	if (action == GLFW_PRESS)
+	{
+		if (key == GLFW_KEY_SPACE)
+			g_animation = !g_animation;
+	}
+}
+
+class orbit_camera : public OrbitCamera
+{
+public:
+	orbit_camera()
+	{
+		rotationSpeed = vec2{5, 5};
+		panSpeed = vec2{5, 5};
+	}
+};
+
 int main(int argc, char * argv[]) 
 {
 	glfwInit();
@@ -181,6 +242,11 @@ int main(int argc, char * argv[])
 		<< "GL_RENDERER: " << glGetString(GL_RENDERER) << "\n"
 		<< "GLSL_VERSION: " << glGetString(GL_SHADING_LANGUAGE_VERSION) << endl;
 	
+	glfwSetScrollCallback(window, scroll_handler);
+	glfwSetMouseButtonCallback(window, mouse_button_handler);
+	glfwSetCursorPosCallback(window, cursor_position_handler);
+	glfwSetKeyCallback(window, key_handler);
+		
 	GLuint shader_program = get_shader_program(vertex_shader_source, fragment_shader_source);
 	glUseProgram(shader_program);
 	GLint position_loc = glGetAttribLocation(shader_program, "position"),
@@ -193,18 +259,19 @@ int main(int argc, char * argv[])
 	vec3 plane_color = vec3{1,0,0};	
 	push(plane_color, color_loc);
 		
-	OrbitCamera cam;
+	orbit_camera cam;
 	cam.Perspective(60, WIDTH/(float)HEIGHT, 0.01f, 1000.0f);
 	cam.SetTarget(vec3{0,0,0});
-	cam.SetZoom(10);
-	cam.Update(0);
 	
+	glFrontFace(GL_CCW);
+	glCullFace(GL_BACK);
 	glEnable(GL_DEPTH_TEST);
 	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 	glViewport(0, 0, WIDTH, HEIGHT);
 
 	// positions
-	GLuint cube_positions_vbo = push_cube();
+	GLuint cube_positions_vbo = push_cube(),
+		axis_position_vbo = push_axis();
 	
 	// prepare normal data
 	GLfloat normals[12*3*3];  // for 12 triangles
@@ -215,18 +282,39 @@ int main(int argc, char * argv[])
 	
 	float light_angle = 0,
 		cube_angle = 0;
-	
+		
 	while (!glfwWindowShouldClose(window))
 	{
+		// input
 		glfwPollEvents();
-		glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
 		
-		mat4 world_to_screen = cam.GetViewMatrix() * cam.GetProjectionMatrix();
-
+		// update
+		
 		// dt
 		steady_clock::time_point now = steady_clock::now();
 		float dt = duration_cast<duration<float>>(now - last_tp).count();
 		last_tp = now;
+		
+		cam.SetZoom(g_camera_zoom);
+		if (g_cursor_move != vec2{0,0})
+		{
+			if (g_rotate_camera)
+				cam.Rotate(g_cursor_move, dt);
+			else if (g_pan_camera)
+				cam.Pan(g_cursor_move, dt);
+		}
+		
+		cam.Update(dt);
+		
+		// draw
+		
+		glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
+		
+		mat4 world_to_screen = cam.GetViewMatrix() * cam.GetProjectionMatrix();
+		
+		// axis
+		push(world_to_screen, local_to_screen_loc);
+		draw_lines(axis_position_vbo, position_loc, 3);
 		
 		// change light direction
 		float const angular_velocity = DEG2RAD(30.f);  // rad/s
@@ -239,9 +327,10 @@ int main(int argc, char * argv[])
 		
 		// draw cube
 		constexpr float cube_angular_velocity = 360/8.f;  // deg/s
-		cube_angle += cube_angular_velocity * dt;
+		if (g_animation)
+			cube_angle += cube_angular_velocity * dt;
 		
-		mat4 M = YRotation(cube_angle);
+		mat4 M = YRotation(cube_angle) * Translation(vec3{3,0,0});
 		mat4 local_to_screen = M * world_to_screen;
 		push(local_to_screen, local_to_screen_loc);
 		
@@ -304,6 +393,11 @@ GLuint push_cube()
 	return push_data(cube_verts, sizeof(cube_verts));
 }
 
+GLuint push_axis()
+{
+	return push_data(axis_verts, sizeof(axis_verts));
+}
+
 GLuint push_xy_plane()
 {
 	return push_data(xy_plane_verts, sizeof(xy_plane_verts));
@@ -325,6 +419,15 @@ void draw(GLuint position_vbo, GLuint normal_vbo, GLint position_loc, GLint norm
 	glVertexAttribPointer(normal_loc, 3, GL_FLOAT, GL_FALSE, 0, (GLvoid*)0);
 	
 	glDrawArrays(GL_TRIANGLES, 0, triangle_count * 3);
+}
+
+void draw_lines(GLuint position_vbo, GLint position_loc, size_t line_count)
+{
+	glEnableVertexAttribArray(position_loc);
+	glBindBuffer(GL_ARRAY_BUFFER, position_vbo);
+	glVertexAttribPointer(position_loc, 3, GL_FLOAT, GL_FALSE, 0, (GLvoid*)0);
+	
+	glDrawArrays(GL_LINES, 0, line_count * 2);
 }
 
 GLint get_shader_program(char const * vertex_shader_source, char const * fragment_shader_source)
