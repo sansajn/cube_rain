@@ -1,6 +1,13 @@
 *.o
+/cube_rain.*
 /*.kdev4
+/*.dblite
 /cube_rain
 /normals
 /plane_normals
 /cube_normals
+/left_vs_right_hand_plane
+/test_module
+/test_program
+/flat_shader_test
+/test_flat_shaded_shader

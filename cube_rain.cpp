@@ -18,10 +18,10 @@ using std::random_device,
 using std::cout, std::endl;
 using namespace std::chrono_literals;
 
-using phys::mat4, 
+using phys::mat4,
 	phys::mat3,
-	phys::vec3, 
-	phys::Projection, 
+	phys::vec3,
+	phys::Projection,
 	phys::Translation,
 	phys::Scale,
 	phys::YRotation,

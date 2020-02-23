@@ -1,4 +1,4 @@
-// plane with normals and lighting
+// cube with normals and lighting
 #include <thread>
 #include <chrono>
 #include <random>
@@ -8,6 +8,8 @@
 #include <GLFW/glfw3.h>
 #include "phys/matrices.h"
 #include "phys/Camera.h"
+#include "flat_shader.hpp"
+#include "flat_shaded_shader.hpp"
 
 using std::vector;
 using std::chrono::steady_clock,
@@ -28,6 +30,7 @@ using phys::mat4,
 	phys::Translation,
 	phys::Scale,
 	phys::YRotation,
+	phys::ZRotation,
 	phys::Inverse,
 	phys::Transpose;
 using phys::DEG2RAD, phys::RAD2DEG;
@@ -35,28 +38,6 @@ using phys::OrbitCamera;
 
 constexpr GLuint WIDTH = 800,
 	HEIGHT = 600;
-	
-GLchar const * vertex_shader_source = R"(
-#version 100
-attribute vec3 position;
-attribute vec3 normal;
-uniform mat4 local_to_screen;
-uniform mat3 normal_to_world;
-varying vec3 n;  // TODO: ujasni si co sa v podobe n dostane do fragment shaderu
-void main() {
-	n = normal_to_world * normal;
-	gl_Position = local_to_screen * vec4(position, 1.0);
-})";
-
-GLchar const * fragment_shader_source = R"(
-#version 100
-precision mediump float;
-uniform vec3 color;
-uniform vec3 light_direction;  // from surface to light
-varying vec3 n;
-void main() {
-	gl_FragColor = vec4(max(dot(n, light_direction), 0.2) * color, 1.0);
-})";
 
 // 2 triangles
 constexpr float xy_plane_verts[] = {
@@ -135,6 +116,11 @@ constexpr float cube_verts[] = {
 	-1.f, 1.f, -1.f
 };
 
+// one line
+constexpr float x_line_verts[] = {
+	0,0,0, 1,0,0
+};
+
 // three lines
 constexpr float axis_verts[] = {
 	0,0,0, 1,0,0,  // x
@@ -143,38 +129,41 @@ constexpr float axis_verts[] = {
 };
 
 GLuint push_cube();
-GLuint push_axis();
+GLuint push_axes();
 GLuint push_xy_plane();
 GLuint push_xz_plane();
 void draw(GLuint position_vbo, GLuint normal_vbo, GLint position_loc, GLint normal_loc, size_t triangle_count);
+void draw_triangles(GLuint position_vbo, GLint position_loc, size_t triangle_count);
 void draw_lines(GLuint position_vbo, GLint position_loc, size_t line_count);
 GLuint push_data(void const * data, size_t size_in_bytes);
 void calc_triangle_normals(float const * positions, size_t triangle_count, float * normals);
 
-
-template <typename T>
-void push(T const & val, GLint loc);
+namespace glt::shader {
 
 template <>
-void push<mat4>(mat4 const & val, GLint loc)
+void set_uniform<mat4>(GLint loc, mat4 const & val)
 {
 	glUniformMatrix4fv(loc, 1, GL_FALSE, &val.asArray[0]);
 }
 
 template <>
-void push<mat3>(mat3 const & val, GLint loc)
+void set_uniform<mat3>(GLint loc, mat3 const & val)
 {
 	glUniformMatrix3fv(loc, 1, GL_FALSE, &val.asArray[0]);
 }
 
 template <>
-void push<vec3>(vec3 const & val, GLint loc)
+void set_uniform<vec3>(GLint loc, vec3 const & val)
 {
 	glUniform3fv(loc, 1, &val.asArray[0]);
 }
 
-GLint get_shader_program(char const * vertex_shader_source, char const * fragment_shader_source);
+}  // gtl::shader
 
+void scroll_handler(GLFWwindow * window, double xoffset, double yoffset);
+void mouse_button_handler(GLFWwindow * window, int button, int action, int mods);
+void cursor_position_handler(GLFWwindow * window, double xpos, double ypos);
+void key_handler(GLFWwindow * window, int key, int scancode, int action, int mods);
 
 // user input helpers
 float g_camera_zoom = 10;
@@ -182,39 +171,6 @@ bool g_rotate_camera = false,
 	g_pan_camera = false;
 vec2 g_cursor_move = vec2{0,0};  // normalized
 bool g_animation = true;
-
-void scroll_handler(GLFWwindow * window, double xoffset, double yoffset)
-{
-	g_camera_zoom -= yoffset/4;
-}
-
-void mouse_button_handler(GLFWwindow * window, int button, int action, int mods)
-{
-	if (button == GLFW_MOUSE_BUTTON_LEFT)
-		g_rotate_camera = action == GLFW_PRESS;
-	else if (button == GLFW_MOUSE_BUTTON_RIGHT)
-		g_pan_camera = action == GLFW_PRESS;
-}
-
-void cursor_position_handler(GLFWwindow * window, double xpos, double ypos)
-{
-	static vec2 last_pos = vec2{xpos, ypos};
-	if (g_rotate_camera || g_pan_camera)
-		g_cursor_move = vec2{xpos, ypos} - last_pos;
-	else
-		g_cursor_move = vec2{0,0};
-		
-	last_pos = vec2{xpos, ypos};
-}
-
-void key_handler(GLFWwindow * window, int key, int scancode, int action, int mods)
-{
-	if (action == GLFW_PRESS)
-	{
-		if (key == GLFW_KEY_SPACE)
-			g_animation = !g_animation;
-	}
-}
 
 class orbit_camera : public OrbitCamera
 {
@@ -225,6 +181,46 @@ public:
 		panSpeed = vec2{5, 5};
 	}
 };
+
+class axes_model
+{
+public:
+	axes_model(GLuint axes_vbo);
+	void draw(gles2::flat_shader & program, mat4 const & local_to_world);
+
+private:
+	GLuint _axes_vbo;
+};
+
+axes_model::axes_model(GLuint axes_vbo)
+	: _axes_vbo{axes_vbo}
+{}
+
+void axes_model::draw(gles2::flat_shader & program, mat4 const & local_to_world)
+{
+	program.local_to_world(local_to_world);
+
+	GLint position_loc = program.position_location();
+
+	glEnableVertexAttribArray(position_loc);
+	glBindBuffer(GL_ARRAY_BUFFER, _axes_vbo);
+
+	// x
+	program.model_color(vec3{1,0,0});
+	glVertexAttribPointer(position_loc, 3, GL_FLOAT, GL_FALSE, 0, (GLvoid*)0);
+	glDrawArrays(GL_LINES, 0, 2);
+
+	// y
+	program.model_color(vec3{0,1,0});
+	glVertexAttribPointer(position_loc, 3, GL_FLOAT, GL_FALSE, 0, (GLvoid*)0);
+	glDrawArrays(GL_LINES, 2, 2);
+
+	// z
+	program.model_color(vec3{0,0,1});
+	glVertexAttribPointer(position_loc, 3, GL_FLOAT, GL_FALSE, 0, (GLvoid*)0);
+	glDrawArrays(GL_LINES, 4, 2);
+}
+
 
 int main(int argc, char * argv[]) 
 {
@@ -247,22 +243,17 @@ int main(int argc, char * argv[])
 	glfwSetCursorPosCallback(window, cursor_position_handler);
 	glfwSetKeyCallback(window, key_handler);
 		
-	GLuint shader_program = get_shader_program(vertex_shader_source, fragment_shader_source);
-	glUseProgram(shader_program);
-	GLint position_loc = glGetAttribLocation(shader_program, "position"),
-		normal_loc = glGetAttribLocation(shader_program, "normal"),
-		local_to_screen_loc = glGetUniformLocation(shader_program, "local_to_screen"),
-		normal_to_world_loc = glGetUniformLocation(shader_program, "normal_to_world"),
-		color_loc = glGetUniformLocation(shader_program, "color"),
-		light_direction_loc = glGetUniformLocation(shader_program, "light_direction");
-	
-	vec3 plane_color = vec3{1,0,0};	
-	push(plane_color, color_loc);
+	gles2::flat_shader flat;
+	gles2::flat_shaded_shader shaded;
+
+	vec3 cube_color = vec3{1,0,0},
+		axis_color = vec3{1,0,0},
+		light_source_color = vec3{1,1,0};
 		
 	orbit_camera cam;
 	cam.Perspective(60, WIDTH/(float)HEIGHT, 0.01f, 1000.0f);
 	cam.SetTarget(vec3{0,0,0});
-	
+
 	glFrontFace(GL_CCW);
 	glCullFace(GL_BACK);
 	glEnable(GL_DEPTH_TEST);
@@ -271,8 +262,9 @@ int main(int argc, char * argv[])
 
 	// positions
 	GLuint cube_positions_vbo = push_cube(),
-		axis_position_vbo = push_axis();
-	
+		axes_positions_vbo = push_axes();
+	axes_model axes{axes_positions_vbo};
+
 	// prepare normal data
 	GLfloat normals[12*3*3];  // for 12 triangles
 	calc_triangle_normals(cube_verts, 12, normals);
@@ -305,42 +297,50 @@ int main(int argc, char * argv[])
 		}
 		
 		cam.Update(dt);
-		
+
 		// draw
 		
 		glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
-		
+
 		mat4 world_to_screen = cam.GetViewMatrix() * cam.GetProjectionMatrix();
 		
 		// axis
-		push(world_to_screen, local_to_screen_loc);
-		draw_lines(axis_position_vbo, position_loc, 3);
+		flat.use();
+		flat.model_color(axis_color);
+		flat.world_to_screen(world_to_screen);
+		mat4 M_axes = Translation(vec3{0,0,0});
+		axes.draw(flat, M_axes);
 		
 		// change light direction
 		float const angular_velocity = DEG2RAD(30.f);  // rad/s
-// 		light_angle += angular_velocity * dt;
+		light_angle += angular_velocity * dt;
 		if (light_angle >= DEG2RAD(90.f))
 			light_angle = 0.f;
 		vec3 light_direction = Normalized(
 			vec3{0, sinf(light_angle), -cosf(light_angle)});
-		push(light_direction, light_direction_loc);
 		
+		// light source
+		constexpr float light_distance = 5.f;
+		flat.model_color(light_source_color);
+		mat4 M_light = Scale(vec3{0.1f, 0.1f, 0.1f}) * Translation(light_direction * light_distance);
+		flat.local_to_world(M_light);
+		draw_triangles(cube_positions_vbo, flat.position_location(), 12);
+
 		// draw cube
+		shaded.use();
+		shaded.model_color(cube_color);
+		shaded.light_direction(light_direction);
+		shaded.world_to_screen(world_to_screen);
+
 		constexpr float cube_angular_velocity = 360/8.f;  // deg/s
 		if (g_animation)
 			cube_angle += cube_angular_velocity * dt;
-		
-		mat4 M = YRotation(cube_angle) * Translation(vec3{3,0,0});
-		mat4 local_to_screen = M * world_to_screen;
-		push(local_to_screen, local_to_screen_loc);
-		
-		mat3 normal_to_world = Transpose(Inverse(mat3{
-			M._11, M._12, M._13,
-			M._21, M._22, M._23,
-			M._31, M._32, M._33}));
-		push(normal_to_world, normal_to_world_loc);
-		
-		draw(cube_positions_vbo, cube_normal_vbo, position_loc, normal_loc, 12);
+
+		mat4 M_cube = YRotation(cube_angle) * Translation(vec3{3,0,0});
+		shaded.local_to_world(M_cube);
+
+		draw(cube_positions_vbo, cube_normal_vbo, shaded.position_location(),
+			shaded.normal_location(), 12);
 		
 		glfwSwapBuffers(window);
 		
@@ -349,10 +349,43 @@ int main(int argc, char * argv[])
 	
 	glDeleteBuffers(1, &cube_normal_vbo);
 	glDeleteBuffers(1, &cube_positions_vbo);
+	glDeleteBuffers(1, &axes_positions_vbo);
 	glfwTerminate();
-	glDeleteProgram(shader_program);
 	
 	return 0;
+}
+
+void scroll_handler(GLFWwindow * window, double xoffset, double yoffset)
+{
+	g_camera_zoom -= yoffset/4;
+}
+
+void mouse_button_handler(GLFWwindow * window, int button, int action, int mods)
+{
+	if (button == GLFW_MOUSE_BUTTON_LEFT)
+		g_rotate_camera = action == GLFW_PRESS;
+	else if (button == GLFW_MOUSE_BUTTON_RIGHT)
+		g_pan_camera = action == GLFW_PRESS;
+}
+
+void cursor_position_handler(GLFWwindow * window, double xpos, double ypos)
+{
+	static vec2 last_pos = vec2{xpos, ypos};
+	if (g_rotate_camera || g_pan_camera)
+		g_cursor_move = vec2{xpos, ypos} - last_pos;
+	else
+		g_cursor_move = vec2{0,0};
+		
+	last_pos = vec2{xpos, ypos};
+}
+
+void key_handler(GLFWwindow * window, int key, int scancode, int action, int mods)
+{
+	if (action == GLFW_PRESS)
+	{
+		if (key == GLFW_KEY_SPACE)
+			g_animation = !g_animation;
+	}
 }
 
 GLuint push_data(void const * data, size_t size_in_bytes)
@@ -393,7 +426,7 @@ GLuint push_cube()
 	return push_data(cube_verts, sizeof(cube_verts));
 }
 
-GLuint push_axis()
+GLuint push_axes()
 {
 	return push_data(axis_verts, sizeof(axis_verts));
 }
@@ -421,6 +454,15 @@ void draw(GLuint position_vbo, GLuint normal_vbo, GLint position_loc, GLint norm
 	glDrawArrays(GL_TRIANGLES, 0, triangle_count * 3);
 }
 
+void draw_triangles(GLuint position_vbo, GLint position_loc, size_t triangle_count)
+{
+	glEnableVertexAttribArray(position_loc);
+	glBindBuffer(GL_ARRAY_BUFFER, position_vbo);
+	glVertexAttribPointer(position_loc, 3, GL_FLOAT, GL_FALSE, 0, (GLvoid*)0);
+
+	glDrawArrays(GL_TRIANGLES, 0, triangle_count * 3);
+}
+
 void draw_lines(GLuint position_vbo, GLint position_loc, size_t line_count)
 {
 	glEnableVertexAttribArray(position_loc);
@@ -428,52 +470,4 @@ void draw_lines(GLuint position_vbo, GLint position_loc, size_t line_count)
 	glVertexAttribPointer(position_loc, 3, GL_FLOAT, GL_FALSE, 0, (GLvoid*)0);
 	
 	glDrawArrays(GL_LINES, 0, line_count * 2);
-}
-
-GLint get_shader_program(char const * vertex_shader_source, char const * fragment_shader_source)
-{
-	enum Consts {INFOLOG_LEN = 512};
-	GLchar infoLog[INFOLOG_LEN];
-	GLint fragment_shader;
-	GLint shader_program;
-	GLint success;
-	GLint vertex_shader;
-
-	/* Vertex shader */
-	vertex_shader = glCreateShader(GL_VERTEX_SHADER);
-	glShaderSource(vertex_shader, 1, &vertex_shader_source, NULL);
-	glCompileShader(vertex_shader);
-	glGetShaderiv(vertex_shader, GL_COMPILE_STATUS, &success);
-	if (!success) {
-		glGetShaderInfoLog(vertex_shader, INFOLOG_LEN, NULL, infoLog);
-		cout << "ERROR::SHADER::VERTEX::COMPILATION_FAILED\n" 
-			<< infoLog << endl;
-	}
-
-	/* Fragment shader */
-	fragment_shader = glCreateShader(GL_FRAGMENT_SHADER);
-	glShaderSource(fragment_shader, 1, &fragment_shader_source, NULL);
-	glCompileShader(fragment_shader);
-	glGetShaderiv(fragment_shader, GL_COMPILE_STATUS, &success);
-	if (!success) {
-		glGetShaderInfoLog(fragment_shader, INFOLOG_LEN, NULL, infoLog);
-		cout << "ERROR::SHADER::FRAGMENT::COMPILATION_FAILED\n" 
-			<< infoLog << endl;
-	}
-
-	/* Link shaders */
-	shader_program = glCreateProgram();
-	glAttachShader(shader_program, vertex_shader);
-	glAttachShader(shader_program, fragment_shader);
-	glLinkProgram(shader_program);
-	glGetProgramiv(shader_program, GL_LINK_STATUS, &success);
-	if (!success) {
-		glGetProgramInfoLog(shader_program, INFOLOG_LEN, NULL, infoLog);
-		cout << "ERROR::SHADER::PROGRAM::LINKING_FAILED\n" 
-			<< infoLog << endl;
-	}
-
-	glDeleteShader(vertex_shader);
-	glDeleteShader(fragment_shader);
-	return shader_program;
 }
