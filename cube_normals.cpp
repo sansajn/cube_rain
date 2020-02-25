@@ -67,58 +67,53 @@ constexpr float xz_plane_verts[] = {
 
 // 12 triangles
 constexpr float cube_verts[] = {
-	-1.f, -1.f, -1.f,  // 1
+	-1.f, -1.f, -1.f,  // front
 	1.f, -1.f, -1.f,
 	1.f, 1.f, -1.f,
 	
-	1.f, 1.f, -1.f,  // 2
+	1.f, 1.f, -1.f,
 	-1.f, 1.f, -1.f,
 	-1.f, -1.f, -1.f,
 	
-	1.f, -1.f, -1.f,  // 3
+	1.f, -1.f, -1.f,  // right
 	1.f, -1.f, 1.f,
 	1.f, 1.f, 1.f,
 	
-	1.f, 1.f, 1.f,  // 4
+	1.f, 1.f, 1.f,
 	1.f, 1.f, -1.f,
 	1.f, -1.f, -1.f,
 	
-	-1.f, -1.f, 1.f,  // 5
+	-1.f, -1.f, 1.f,  // back
 	-1.f, 1.f, 1.f,
 	1.f, 1.f, 1.f,
 	
-	1.f, 1.f, 1.f,  // 6
+	1.f, 1.f, 1.f,
 	1.f, -1.f, 1.f,
 	-1.f, -1.f, 1.f,
 		
-	-1.f, -1.f, -1.f,  // 7
+	-1.f, -1.f, -1.f,  // left
 	-1.f, 1.f, -1.f,
 	-1.f, 1.f, 1.f,
 	
-	-1.f, 1.f, 1.f,  // 8
+	-1.f, 1.f, 1.f,
 	-1.f, -1.f, 1.f,
 	-1.f, -1.f, -1.f,
 	
-	-1.f, -1.f, -1.f,  // 9
+	-1.f, -1.f, -1.f,  // top
 	-1.f, -1.f, 1.f,
 	1.f, -1.f, 1.f,
 	
-	1.f, -1.f, 1.f,  // 10
+	1.f, -1.f, 1.f,
 	1.f, -1.f, -1.f,
 	-1.f, -1.f, -1.f,
 	
-	-1.f, 1.f, -1.f,  // 11
+	-1.f, 1.f, -1.f,  // bottom
 	1.f, 1.f, -1.f,
 	1.f, 1.f, 1.f,
 	
-	1.f, 1.f, 1.f,  // 12
+	1.f, 1.f, 1.f,
 	-1.f, 1.f, 1.f,
 	-1.f, 1.f, -1.f
-};
-
-// one line
-constexpr float x_line_verts[] = {
-	0,0,0, 1,0,0
 };
 
 // three lines
@@ -128,8 +123,14 @@ constexpr float axis_verts[] = {
 	0,0,0, 0,0,1  // z
 };
 
+// one line
+constexpr float line_verts[] = {
+	0,0,0, 0,0,1
+};
+
 GLuint push_cube();
 GLuint push_axes();
+GLuint push_line();
 GLuint push_xy_plane();
 GLuint push_xz_plane();
 void draw(GLuint position_vbo, GLuint normal_vbo, GLint position_loc, GLint normal_loc, size_t triangle_count);
@@ -170,7 +171,8 @@ float g_camera_zoom = 10;
 bool g_rotate_camera = false,
 	g_pan_camera = false;
 vec2 g_cursor_position = vec2{0,0};
-bool g_animation = true;
+bool g_animation = true,
+	g_light_move = true;
 
 class orbit_camera : public OrbitCamera
 {
@@ -221,6 +223,26 @@ void axes_model::draw(gles2::flat_shader & program, mat4 const & local_to_world)
 	glDrawArrays(GL_LINES, 4, 2);
 }
 
+class direction_model
+{
+public:
+	direction_model(GLuint x_axis_vbo);
+	void draw(gles2::flat_shader & program, mat4 const & direction);
+
+private:
+	GLuint _x_axis_vbo;
+};
+
+direction_model::direction_model(GLuint x_axis_vbo)
+	: _x_axis_vbo{x_axis_vbo}
+{}
+
+void direction_model::draw(gles2::flat_shader & program, mat4 const & direction)
+{
+	program.local_to_world(direction);
+	draw_lines(_x_axis_vbo, program.position_location(), 1);
+}
+
 
 int main(int argc, char * argv[]) 
 {
@@ -262,8 +284,10 @@ int main(int argc, char * argv[])
 
 	// positions
 	GLuint cube_positions_vbo = push_cube(),
-		axes_positions_vbo = push_axes();
+		axes_positions_vbo = push_axes(),
+		line_position_vbo = push_line();
 	axes_model axes{axes_positions_vbo};
+	direction_model direction{line_position_vbo};
 
 	// prepare normal data
 	GLfloat normals[12*3*3];  // for 12 triangles
@@ -318,7 +342,8 @@ int main(int argc, char * argv[])
 		
 		// change light direction
 		float const angular_velocity = DEG2RAD(30.f);  // rad/s
-		light_angle += angular_velocity * dt;
+		if (g_light_move)
+			light_angle += angular_velocity * dt;
 		if (light_angle >= DEG2RAD(90.f))
 			light_angle = 0.f;
 		vec3 light_direction = Normalized(
@@ -331,7 +356,11 @@ int main(int argc, char * argv[])
 		flat.local_to_world(M_light);
 		draw_triangles(cube_positions_vbo, flat.position_location(), 12);
 
-		// draw cube
+		// line source direction
+		mat4 M_light_direction = LookAt(vec3{0,0,0}, light_direction, vec3{0,1,0});
+		direction.draw(flat, M_light_direction);
+
+		// draw cube a
 		shaded.use();
 		shaded.model_color(cube_color);
 		shaded.light_direction(light_direction);
@@ -343,10 +372,15 @@ int main(int argc, char * argv[])
 
 		mat4 M_cube = YRotation(cube_angle) * Translation(vec3{3,0,0});
 		shaded.local_to_world(M_cube);
-
 		draw(cube_positions_vbo, cube_normal_vbo, shaded.position_location(),
 			shaded.normal_location(), 12);
-		
+
+		// cube b
+		mat4 M_cube_b = Scale(vec3{0.2f, 0.2f, 0.2f}) * YRotation(cube_angle) * Translation(vec3{-3,0,0});
+		shaded.local_to_world(M_cube_b);
+		draw(cube_positions_vbo, cube_normal_vbo, shaded.position_location(),
+			shaded.normal_location(), 12);
+
 		glfwSwapBuffers(window);
 		
 		std::this_thread::sleep_for(10ms);
@@ -384,6 +418,8 @@ void key_handler(GLFWwindow * window, int key, int scancode, int action, int mod
 	{
 		if (key == GLFW_KEY_SPACE)
 			g_animation = !g_animation;
+		else if (key == GLFW_KEY_L)
+			g_light_move = !g_light_move;
 	}
 }
 
@@ -428,6 +464,11 @@ GLuint push_cube()
 GLuint push_axes()
 {
 	return push_data(axis_verts, sizeof(axis_verts));
+}
+
+GLuint push_line()
+{
+	return push_data(line_verts, sizeof(line_verts));
 }
 
 GLuint push_xy_plane()

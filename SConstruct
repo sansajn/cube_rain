@@ -20,7 +20,9 @@ objs = cpp17.Object([
 	'flat_shaded_shader.cpp'
 ])
 
-cpp17.Program(['cube_rain.cpp', phys])
+cpp17.Program(['cube_rain.cpp', glt, objs, phys])
+
+# helpers
 cpp17.Program(['normals.cpp', phys])
 cpp17.Program(['plane_normals.cpp', phys])
 cpp17.Program(['cube_normals.cpp', glt, phys, objs])
