@@ -10,13 +10,6 @@ using glm::vec2;
 constexpr GLuint WIDTH = 800,
 	HEIGHT = 600;
 
-vec2 get_cursor_position(GLFWwindow * window)
-{
-	double x, y;
-	glfwGetCursorPos(window, &x, &y);
-	return {x,y};
-}
-
 vec2 g_cursor_position = vec2{0,0};
 
 void cursor_position_handler(GLFWwindow * window, double xpos, double ypos)
