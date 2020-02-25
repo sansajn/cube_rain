@@ -147,7 +147,7 @@ void key_handler(GLFWwindow * window, int key, int scancode, int action, int mod
 float g_camera_zoom = 10;
 bool g_rotate_camera = false,
 	g_pan_camera = false;
-vec2 g_cursor_move = vec2{0,0};  // normalized
+vec2 g_cursor_position = vec2{0,0};
 bool g_animation = true;
 
 class orbit_camera : public OrbitCamera
@@ -260,12 +260,17 @@ int main(int argc, char * argv[])
 	
 	float light_angle = 0,
 		cube_angle = 0;
+		
+	vec2 prev_cursor_position = g_cursor_position;
 
 	while (!glfwWindowShouldClose(window))
 	{
 		// input
 		glfwPollEvents();
 
+		vec2 cursor_move = g_cursor_position - prev_cursor_position;
+		prev_cursor_position = g_cursor_position;
+		
 		// update
 
 		// dt
@@ -274,12 +279,12 @@ int main(int argc, char * argv[])
 		last_tp = now;
 
 		cam.SetZoom(g_camera_zoom);
-		if (g_cursor_move != vec2{0,0})
+		if (cursor_move != vec2{0,0})
 		{
 			if (g_rotate_camera)
-				cam.Rotate(g_cursor_move, dt);
+				cam.Rotate(cursor_move, dt);
 			else if (g_pan_camera)
-				cam.Pan(g_cursor_move, dt);
+				cam.Pan(cursor_move, dt);
 		}
 
 		cam.Update(dt);
@@ -377,13 +382,7 @@ void mouse_button_handler(GLFWwindow * window, int button, int action, int mods)
 
 void cursor_position_handler(GLFWwindow * window, double xpos, double ypos)
 {
-	static vec2 last_pos = vec2{xpos, ypos};
-	if (g_rotate_camera || g_pan_camera)
-		g_cursor_move = vec2{xpos, ypos} - last_pos;
-	else
-		g_cursor_move = vec2{0,0};
-
-	last_pos = vec2{xpos, ypos};
+	g_cursor_position = vec2{xpos, ypos};
 }
 
 void key_handler(GLFWwindow * window, int key, int scancode, int action, int mods)
