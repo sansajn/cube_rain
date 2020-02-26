@@ -15,7 +15,7 @@ uniform mat4 local_to_screen;
 uniform mat3 normal_to_world;
 varying vec3 n;
 void main() {
-	n = normal_to_world * normal;
+	n = normalize(normal_to_world * normal);
 	gl_Position = local_to_screen * vec4(position, 1.0);
 }
 #endif

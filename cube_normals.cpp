@@ -10,6 +10,7 @@
 #include "phys/Camera.h"
 #include "flat_shader.hpp"
 #include "flat_shaded_shader.hpp"
+#include "glmprint.hpp"
 
 using std::vector;
 using std::chrono::steady_clock,
@@ -172,7 +173,8 @@ bool g_rotate_camera = false,
 	g_pan_camera = false;
 vec2 g_cursor_position = vec2{0,0};
 bool g_animation = true,
-	g_light_move = true;
+	g_light_move = true,
+	g_report_world_setup = false;
 
 class orbit_camera : public OrbitCamera
 {
@@ -381,6 +383,23 @@ int main(int argc, char * argv[])
 		draw(cube_positions_vbo, cube_normal_vbo, shaded.position_location(),
 			shaded.normal_location(), 12);
 
+		// report
+		if (g_report_world_setup)
+		{
+			cout << "light_dir=" << light_direction << "\n"
+				<< "M_cube_b=" << M_cube_b << "\n";
+
+			mat4 N = Transpose(Inverse(Transpose(M_cube_b)));
+			vec3 n = vec3{0,1,0};
+			vec3 n_ = MultiplyVector(n, N);
+
+			cout << "n_=" << n_ << "\n";
+
+			cout << "dot(n,l)=" << Dot(n_, light_direction) << endl;
+
+			g_report_world_setup = false;
+		}
+
 		glfwSwapBuffers(window);
 		
 		std::this_thread::sleep_for(10ms);
@@ -420,6 +439,8 @@ void key_handler(GLFWwindow * window, int key, int scancode, int action, int mod
 			g_animation = !g_animation;
 		else if (key == GLFW_KEY_L)
 			g_light_move = !g_light_move;
+
+		g_report_world_setup = true;
 	}
 }
 
