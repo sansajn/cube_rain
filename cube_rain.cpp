@@ -109,7 +109,8 @@ constexpr float axis_verts[] = {
 GLuint push_cube();
 GLuint push_axes();
 GLuint push_xz_plane();
-void draw(GLuint position_vbo, GLuint normal_vbo, GLint position_loc, GLint normal_loc, size_t triangle_count);
+void draw_triangles(GLuint position_vbo, GLuint normal_vbo, GLint position_loc,
+	GLint normal_loc, size_t triangle_count);
 void draw_triangles(GLuint position_vbo, GLint position_loc, size_t triangle_count);
 GLuint push_data(void const * data, size_t size_in_bytes);
 void calc_triangle_normals(float const * positions, size_t triangle_count, float * normals);
@@ -135,6 +136,16 @@ void set_uniform<vec3>(GLint loc, vec3 const & val)
 }
 
 }  // gtl::shader
+
+
+// flyweight
+struct cube_object
+{
+	vec3 position;
+	float scale;  // value from 0.8 to 1.2 used to scale unit cube
+};
+
+cube_object new_cube();
 
 vec3 random_cube_position();
 
@@ -254,10 +265,10 @@ int main(int argc, char * argv[])
 		
 	steady_clock::time_point last_tp = steady_clock::now();
 	
-	vector<vec3> positions(100);
-	for (vec3 & pos : positions)
-		pos = random_cube_position();
-	
+	vector<cube_object> cubes(300);
+	for (cube_object & cube : cubes)
+		cube = new_cube();
+
 	float light_angle = 0,
 		cube_angle = 0;
 		
@@ -304,7 +315,8 @@ int main(int argc, char * argv[])
 
 		// change light direction
 		float const angular_velocity = DEG2RAD(30.f);  // rad/s
-		light_angle += angular_velocity * dt;
+//		light_angle += angular_velocity * dt;
+		light_angle = DEG2RAD(60.f);
 		if (light_angle >= DEG2RAD(90.f))
 			light_angle = 0.f;
 		vec3 light_direction = Normalized(
@@ -315,7 +327,7 @@ int main(int argc, char * argv[])
 		flat.model_color(light_source_color);
 		mat4 M_light = Scale(vec3{0.1f, 0.1f, 0.1f}) * Translation(light_direction * light_distance);
 		flat.local_to_world(M_light);
-		draw_triangles(cube_position_vbo, flat.position_location(), 12);
+//		draw_triangles(cube_position_vbo, flat.position_location(), 12);
 
 		// draw cube
 		shaded.use();
@@ -330,27 +342,27 @@ int main(int argc, char * argv[])
 		mat4 M_cube = YRotation(cube_angle) * Translation(vec3{3,0,0});
 		shaded.local_to_world(M_cube);
 
-		draw(cube_position_vbo, cube_normal_vbo, shaded.position_location(),
-			shaded.normal_location(), 12);
+//		draw_triangles(cube_position_vbo, cube_normal_vbo, shaded.position_location(),
+//			shaded.normal_location(), 12);
 		
 		// draw falling cubes
-		for (vec3 & pos : positions)
+		for (cube_object & cube : cubes)
 		{
 			constexpr float fall_speed = 3.f;
 			if (g_animation)
-				pos.y -= fall_speed * dt;
+				cube.position.y -= fall_speed * (2.f - cube.scale) * dt;
 			
 			// reuse fallen cubes
-			if (pos.y < -10.f)
+			if (cube.position.y < -10.f)
 			{
-				pos = random_cube_position();
+				cube = new_cube();
 				continue;
 			}
 		
-			mat4 M = Scale(0.2f, 0.2f, 0.2f) * Translate(pos);
+			mat4 M = Scale(vec3{0.2f, 0.2f, 0.2f}*cube.scale) * Translate(cube.position);
 			shaded.local_to_world(M);
 
-			draw(cube_position_vbo, cube_normal_vbo, shaded.position_location(),
+			draw_triangles(cube_position_vbo, cube_normal_vbo, shaded.position_location(),
 				shaded.normal_location(), 12);
 		}
 		
@@ -392,6 +404,20 @@ void key_handler(GLFWwindow * window, int key, int scancode, int action, int mod
 		if (key == GLFW_KEY_SPACE)
 			g_animation = !g_animation;
 	}
+}
+
+cube_object new_cube()
+{
+	static random_device rd;
+	static default_random_engine rand{rd()};
+
+	return cube_object{
+		vec3{
+			(rand() % 15) - 7.f,
+			7.f + (rand() % 30),
+			(rand() % 15) - 7.f},
+		0.7f + ((rand() % 70)/100.f)  // scale between 0.7 and 1.3
+	};
 }
 
 vec3 random_cube_position()
@@ -462,7 +488,8 @@ void draw_triangles(GLuint position_vbo, GLint position_loc, size_t triangle_cou
 	glDrawArrays(GL_TRIANGLES, 0, triangle_count * 3);
 }
 
-void draw(GLuint position_vbo, GLuint normal_vbo, GLint position_loc, GLint normal_loc, size_t triangle_count)
+void draw_triangles(GLuint position_vbo, GLuint normal_vbo, GLint position_loc,
+	GLint normal_loc, size_t triangle_count)
 {
 	glEnableVertexAttribArray(position_loc);
 	glBindBuffer(GL_ARRAY_BUFFER, position_vbo);
