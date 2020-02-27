@@ -1,4 +1,10 @@
-# libglfw3-dev (3.2.1, ubuntu 18.04)
+''' cube rain build file
+
+dependencies:
+
+	libglfw3-dev (3.2.1, ubuntu 18.04)
+	libglew-dev (2.0.5, ubuntu 18.04)
+'''
 
 cpp17 = Environment(
 	CCFLAGS=['-std=c++17', '-Wall', '-O0', '-g'],
@@ -29,13 +35,13 @@ objs = cpp17.Object([
 
 cpp17.Program(['cube_rain.cpp', glt, objs, phys, imgui])
 
-# helpers
-cpp17.Program(['normals.cpp', phys])
-cpp17.Program(['plane_normals.cpp', phys])
-cpp17.Program(['cube_normals.cpp', glt, phys, objs])
-cpp17.Program(['left_vs_right_hand_plane.cpp', phys])
-cpp17.Program(['test_module.cpp', glt])
-cpp17.Program(['test_program.cpp', glt, phys])
-cpp17.Program(['test_flat_shaded_shader.cpp', glt, phys, objs])
-cpp17.Program(['test_mouse_move.cpp'])
-cpp17.Program(['test_transform_normals.cpp'])
+# tests
+cpp17.Program(['test/normals.cpp', phys])
+cpp17.Program(['test/plane_normals.cpp', phys])
+cpp17.Program(['test/cube_normals.cpp', glt, phys, objs])
+cpp17.Program(['test/left_vs_right_hand_plane.cpp', phys])
+cpp17.Program(['test/test_module.cpp', glt])
+cpp17.Program(['test/test_program.cpp', glt, phys])
+cpp17.Program(['test/test_flat_shaded_shader.cpp', glt, phys, objs])
+cpp17.Program(['test/test_mouse_move.cpp'])
+cpp17.Program(['test/test_transform_normals.cpp'])
