@@ -5,6 +5,7 @@
 #include <iostream>
 #include <vector>
 #include <cassert>
+#include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include "glt/program.hpp"
 #include "glt/gles2.hpp"
@@ -95,6 +96,8 @@ int main(int argc, char * argv[])
 		<< "GL_RENDERER: " << glGetString(GL_RENDERER) << "\n"
 		<< "GLSL_VERSION: " << glGetString(GL_SHADING_LANGUAGE_VERSION) << endl;
 	
+	bool err = glewInit() != GLEW_OK;
+
 	gles2::flat_shaded_shader shader_program;
 	shader_program.use();
 

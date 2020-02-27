@@ -5,6 +5,7 @@
 #include <iostream>
 #include <vector>
 #include <cassert>
+#include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include "phys/matrices.h"
 #include "phys/Camera.h"
@@ -110,6 +111,8 @@ int main(int argc, char * argv[])
 		<< "GL_RENDERER: " << glGetString(GL_RENDERER) << "\n"
 		<< "GLSL_VERSION: " << glGetString(GL_SHADING_LANGUAGE_VERSION) << endl;
 	
+	bool err = glewInit() != GLEW_OK;
+
 	using program = glt::shader::program<glt::shader::module<glt::shader::gles2_shader_type>>;
 	program shader_program;
 	shader_program.from_memory(shader_program_code, 100);

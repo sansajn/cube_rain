@@ -48,7 +48,6 @@ int main(int argc, char * argv[])
 			cout << "(" << mouse_move.x << ", " << mouse_move.y << ") mouse move" << endl;
 			
 		glfwSwapBuffers(window);
-		
 	}
 	
 	glfwTerminate();

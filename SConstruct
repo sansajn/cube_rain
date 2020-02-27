@@ -2,9 +2,16 @@
 
 cpp17 = Environment(
 	CCFLAGS=['-std=c++17', '-Wall', '-O0', '-g'],
-	CPPDEFINES=['GLFW_INCLUDE_ES2'])
+	CPPDEFINES=['IMGUI_IMPL_OPENGL_ES3'],
+	CPPPATH=['.', 'imgui/', 'imgui/examples/'])
 
-cpp17.ParseConfig('pkg-config --cflags --libs glfw3 glesv2')
+cpp17.ParseConfig('pkg-config --cflags --libs glfw3 glew gl')
+
+imgui = cpp17.StaticLibrary([
+	Glob('imgui/*.cpp'),
+	'imgui/examples/imgui_impl_glfw.cpp',  # backend for GLFW
+	'imgui/examples/imgui_impl_opengl3.cpp',  # backend for opengl es3
+])
 
 phys = cpp17.Object(Glob('phys/*.cpp'))
 
@@ -20,7 +27,7 @@ objs = cpp17.Object([
 	'flat_shaded_shader.cpp'
 ])
 
-cpp17.Program(['cube_rain.cpp', glt, objs, phys])
+cpp17.Program(['cube_rain.cpp', glt, objs, phys, imgui])
 
 # helpers
 cpp17.Program(['normals.cpp', phys])

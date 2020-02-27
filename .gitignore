@@ -1,7 +1,9 @@
 *.o
+*.a
 /cube_rain.*
 /*.kdev4
 /*.dblite
+/imgui.ini
 /cube_rain
 /normals
 /plane_normals

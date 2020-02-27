@@ -1,16 +1,22 @@
 // row major matrices xy plane sample with glew3 and OpenGL ES 2.0
+#include <algorithm>
 #include <thread>
 #include <chrono>
 #include <random>
 #include <iostream>
 #include <vector>
 #include <cassert>
+#include <GL/glew.h>
 #include <GLFW/glfw3.h>
+#include "imgui/imgui.h"
+#include "imgui/examples/imgui_impl_glfw.h"
+#include "imgui/examples/imgui_impl_opengl3.h"
 #include "phys/matrices.h"
 #include "phys/Camera.h"
 #include "flat_shader.hpp"
 #include "flat_shaded_shader.hpp"
 
+using std::transform;
 using std::vector;
 using std::chrono::steady_clock,
 	std::chrono::duration,
@@ -232,6 +238,18 @@ int main(int argc, char * argv[])
 	glfwSetCursorPosCallback(window, cursor_position_handler);
 	glfwSetKeyCallback(window, key_handler);
 
+	bool err = glewInit() != GLEW_OK;
+
+	// Setup Dear ImGui context
+	IMGUI_CHECKVERSION();
+	ImGui::CreateContext();
+	ImGuiIO & io = ImGui::GetIO(); (void)io;
+	ImGui::StyleColorsDark();
+
+	// Setup Platform/Renderer bindings
+	ImGui_ImplGlfw_InitForOpenGL(window, true);
+	ImGui_ImplOpenGL3_Init();
+
 	gles2::flat_shader flat;
 	gles2::flat_shaded_shader shaded;
 
@@ -265,7 +283,8 @@ int main(int argc, char * argv[])
 		
 	steady_clock::time_point last_tp = steady_clock::now();
 	
-	vector<cube_object> cubes(300);
+	int cube_count = 300;
+	vector<cube_object> cubes(cube_count);
 	for (cube_object & cube : cubes)
 		cube = new_cube();
 
@@ -289,6 +308,26 @@ int main(int argc, char * argv[])
 		float dt = duration_cast<duration<float>>(now - last_tp).count();
 		last_tp = now;
 
+		static float one_second_counter = 0;
+		one_second_counter += dt;
+
+		if (one_second_counter >= 1)
+		{
+			int prev_cube_count = cubes.size();
+			cubes.resize(cube_count);
+
+			if (cube_count > prev_cube_count)
+			{
+				auto beg = begin(cubes) + prev_cube_count;
+				transform(beg, end(cubes), beg,
+					[](cube_object const &){
+						return new_cube();
+					});
+			}
+
+			one_second_counter -= 1;
+		}
+
 		cam.SetZoom(g_camera_zoom);
 		if (cursor_move != vec2{0,0})
 		{
@@ -300,7 +339,21 @@ int main(int argc, char * argv[])
 
 		cam.Update(dt);
 
-		// draw
+		// draw gui
+		ImGui_ImplOpenGL3_NewFrame();
+		ImGui_ImplGlfw_NewFrame();
+		ImGui::NewFrame();
+
+		ImGui::Begin("Info");  // begin window
+
+		// ...
+		ImGui::SliderInt("Number of cubes", &cube_count, 100, 1500);
+
+		ImGui::End();  // end window
+
+		ImGui::Render();
+
+		// draw scene
 
 		glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
 		
@@ -366,6 +419,8 @@ int main(int argc, char * argv[])
 				shaded.normal_location(), 12);
 		}
 		
+		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
 		glfwSwapBuffers(window);
 		
 		std::this_thread::sleep_for(10ms);
@@ -386,6 +441,9 @@ void scroll_handler(GLFWwindow * window, double xoffset, double yoffset)
 
 void mouse_button_handler(GLFWwindow * window, int button, int action, int mods)
 {
+	if (ImGui::GetIO().WantCaptureMouse)
+		return;
+
 	if (button == GLFW_MOUSE_BUTTON_LEFT)
 		g_rotate_camera = action == GLFW_PRESS;
 	else if (button == GLFW_MOUSE_BUTTON_RIGHT)
