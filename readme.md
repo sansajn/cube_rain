@@ -8,9 +8,7 @@ One of my OpenGL ES 3 based mini project, the goal here is to make rain of cubes
 
 ## controls
 
-**space:** stop falling animation
-**left mouse:** rotate camera
-**right mouse:** pan camera
+**space:** stop falling animation, **left mouse:** rotate camera, **right mouse:** pan camera
 
 ## building
 
