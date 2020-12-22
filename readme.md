@@ -19,12 +19,12 @@ cd cube_rain
 scons -j4
 ```
 
-but before we can do it we need to install *glfw3*, *glew* and *scons* libraries.
+but before we can do it we need to install *glfw3*, *glew*, *glm* and *scons* libraries.
 
 > **Note:** in Ubuntu 19.10 use
 >
 > ```sh
-> sudo apt install libglfw3-dev libglew-dev scons
+> sudo apt install libglfw3-dev libglew-dev libglm-dev scons
 > ```
 >
 > command.
